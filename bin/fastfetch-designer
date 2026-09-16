@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve the same user config location Fastfetch normally searches.
+APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fastfetch-designer"
 config_path=""
 
 if [[ -n "${FASTFETCH_CONFIG:-}" && -f "${FASTFETCH_CONFIG}" ]]; then
@@ -9,8 +9,6 @@ if [[ -n "${FASTFETCH_CONFIG:-}" && -f "${FASTFETCH_CONFIG}" ]]; then
 elif [[ -n "${FASTFETCH_CONFIG_PATH:-}" && -f "${FASTFETCH_CONFIG_PATH}" ]]; then
     config_path="$FASTFETCH_CONFIG_PATH"
 else
-    # Fastfetch reports search directories with --list-config-paths.
-    # For each directory, check for the standard config.jsonc filename.
     if command -v fastfetch >/dev/null 2>&1; then
         while IFS= read -r raw; do
             line="${raw#"${raw%%[![:space:]]*}"}"
@@ -48,4 +46,4 @@ if [[ -n "$config_path" ]]; then
     export FASTFETCH_CONFIG="$config_path"
 fi
 
-exec python3 "${APP_DIR:-$HOME/.local/share/fastfetch-designer}/src/fastfetch_designer.py" "$@"
+exec python3 "$APP_DIR/src/fastfetch_designer.py" "$@"
