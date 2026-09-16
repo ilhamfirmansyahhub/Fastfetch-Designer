@@ -1,21 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fastfetch-designer"
 BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
 DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
-SRC_DIR="$(dirname "$0")/src"
-DATA_DIR="$(dirname "$0")/data"
 
-mkdir -p "$APP_DIR/src" "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
-cp -f "$SRC_DIR/fastfetch_designer.py" "$APP_DIR/src/fastfetch_designer.py"
-cp -f "$DATA_DIR/fastfetch-designer.svg" "$ICON_DIR/fastfetch-designer.svg"
-chmod +x "$APP_DIR/src/fastfetch_designer.py"
+command -v python3 >/dev/null 2>&1 || { echo "Error: python3 is required." >&2; exit 1; }
+python3 -c 'import gi; gi.require_version("Gtk", "4.0"); from gi.repository import Gtk' >/dev/null 2>&1 || {
+  echo "Error: GTK4 PyGObject is required." >&2
+  echo "Install it with: sudo pacman -S --needed gtk4 python python-gobject" >&2
+  exit 1
+}
+command -v fastfetch >/dev/null 2>&1 || {
+  echo "Error: fastfetch is required." >&2
+  echo "Install it with: sudo pacman -S --needed fastfetch" >&2
+  exit 1
+}
 
-# The source in the repository is the source that gets installed.
-# No install-time source patching is required.
-ln -sf "$APP_DIR/src/fastfetch_designer.py" "$BIN_DIR/fastfetch-designer"
+mkdir -p "$APP_DIR" "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
+
+install -m 755 "$PROJECT_DIR/src/fastfetch_designer.py" "$APP_DIR/fastfetch_designer.py"
+install -m 644 "$PROJECT_DIR/data/fastfetch-designer.svg" "$ICON_DIR/fastfetch-designer.svg"
+
+cat > "$BIN_DIR/fastfetch-designer" <<EOF
+#!/usr/bin/env bash
+exec python3 "$APP_DIR/fastfetch_designer.py" "\$@"
+EOF
+chmod 755 "$BIN_DIR/fastfetch-designer"
 
 cat > "$DESKTOP_DIR/fastfetch-designer.desktop" <<EOF
 [Desktop Entry]
@@ -36,10 +49,10 @@ if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
 fi
 
-echo
-echo "Fastfetch Designer installed successfully."
-echo "Command: $BIN_DIR/fastfetch-designer"
-echo "Launcher: Fastfetch Designer (with application icon)"
-if ! command -v fastfetch >/dev/null 2>&1; then
-  echo "Warning: fastfetch is not installed or not in PATH."
-fi
+# Validate the installed Python source before reporting success.
+python3 -m py_compile "$APP_DIR/fastfetch_designer.py"
+
+printf '\nFastfetch Designer installed successfully.\n'
+printf 'Command: %s\n' "$BIN_DIR/fastfetch-designer"
+printf 'Launcher: Fastfetch Designer (with application icon)\n'
+printf 'Config detection: automatic\n'
