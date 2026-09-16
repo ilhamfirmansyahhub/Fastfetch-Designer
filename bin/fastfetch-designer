@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Keep launcher behavior identical to Fastfetch: let the Python app discover
-# the active config itself, including FASTFETCH_CONFIG / FASTFETCH_CONFIG_PATH.
 APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fastfetch-designer"
-exec python3 "$APP_DIR/src/fastfetch_designer.py" "$@"
+exec python3 "$APP_DIR/fastfetch_designer.py" "$@"
