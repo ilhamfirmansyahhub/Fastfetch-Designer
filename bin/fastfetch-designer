@@ -1,49 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Keep launcher behavior identical to Fastfetch: let the Python app discover
+# the active config itself, including FASTFETCH_CONFIG / FASTFETCH_CONFIG_PATH.
 APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fastfetch-designer"
-config_path=""
-
-if [[ -n "${FASTFETCH_CONFIG:-}" && -f "${FASTFETCH_CONFIG}" ]]; then
-    config_path="$FASTFETCH_CONFIG"
-elif [[ -n "${FASTFETCH_CONFIG_PATH:-}" && -f "${FASTFETCH_CONFIG_PATH}" ]]; then
-    config_path="$FASTFETCH_CONFIG_PATH"
-else
-    if command -v fastfetch >/dev/null 2>&1; then
-        while IFS= read -r raw; do
-            line="${raw#"${raw%%[![:space:]]*}"}"
-            line="${line%"${line##*[![:space:]]}"}"
-            [[ -z "$line" ]] && continue
-            [[ "$line" == \#* || "$line" == //* ]] && continue
-            line="${line%% -> *}"
-            line="${line#\"}"
-            line="${line%\"}"
-            line="${line/#\~/$HOME}"
-            line="${line//\$HOME/$HOME}"
-            line="${line//\$XDG_CONFIG_HOME/${XDG_CONFIG_HOME:-$HOME/.config}}"
-
-            if [[ -d "$line" && -f "$line/config.jsonc" ]]; then
-                config_path="$line/config.jsonc"
-                break
-            elif [[ -f "$line" && "$line" == *.jsonc ]]; then
-                config_path="$line"
-                break
-            fi
-        done < <(fastfetch --list-config-paths 2>/dev/null || true)
-    fi
-
-    if [[ -z "$config_path" ]]; then
-        config_root="${XDG_CONFIG_HOME:-$HOME/.config}"
-        if [[ -f "$config_root/fastfetch/config.jsonc" ]]; then
-            config_path="$config_root/fastfetch/config.jsonc"
-        elif [[ -f "$config_root/fastfetch/config.json" ]]; then
-            config_path="$config_root/fastfetch/config.json"
-        fi
-    fi
-fi
-
-if [[ -n "$config_path" ]]; then
-    export FASTFETCH_CONFIG="$config_path"
-fi
-
 exec python3 "$APP_DIR/src/fastfetch_designer.py" "$@"
