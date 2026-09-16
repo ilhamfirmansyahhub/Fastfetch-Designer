@@ -35,11 +35,12 @@ COLORS = {
     "Monochrome": {"keys": "#FFFFFF", "title": "#FFFFFF", "output": "#E6E6E6", "separator": "#AAAAAA"},
 }
 
-ANSI_RE = re.compile(r"\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\))")
+ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 
 
 def strip_ansi(text: str) -> str:
-    return "".join(c for c in ANSI_RE.sub("", text) if c in "\n\r\t" or ord(c) >= 32)
+    cleaned = ANSI_RE.sub("", text)
+    return "".join(c for c in cleaned if c in "\n\r\t" or ord(c) >= 32)
 
 
 def strip_jsonc(text: str) -> str:
@@ -63,41 +64,40 @@ def strip_jsonc(text: str) -> str:
         if c == '"':
             quoted = True
             out.append(c)
-            i += 1
         elif c == "/" and n == "/":
             i += 2
             while i < len(text) and text[i] not in "\r\n":
                 i += 1
+            continue
         elif c == "/" and n == "*":
             i += 2
             while i + 1 < len(text) and text[i:i + 2] != "*/":
                 i += 1
             i += 2
+            continue
         else:
             out.append(c)
-            i += 1
+        i += 1
     return re.sub(r",\s*([}\]])", r"\1", "".join(out))
 
 
 def discover_config() -> Path:
     candidates = []
+
     for env_name in ("FASTFETCH_CONFIG", "FASTFETCH_CONFIG_PATH"):
         value = os.environ.get(env_name)
         if value:
-            p = Path(os.path.expandvars(os.path.expanduser(value)))
+            p = Path(os.path.expandvars(os.path.expanduser(value))).expanduser()
             if p.is_file():
                 candidates.append(p)
 
-    # Prefer the normal XDG config because that is the common active setup.
-    xdg = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    xdg = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))).expanduser()
     candidates.extend([
         xdg / "fastfetch" / "config.jsonc",
         xdg / "fastfetch" / "config.json",
         CONFIG_FALLBACK,
     ])
 
-    # Then inspect paths reported by Fastfetch. Some versions print extra text,
-    # so only accept candidates that resolve to actual files/directories.
     try:
         result = subprocess.run(
             ["fastfetch", "--list-config-paths"],
@@ -111,13 +111,16 @@ def discover_config() -> Path:
             if not line or line.startswith(("#", "//")):
                 continue
             line = line.split(" -> ", 1)[0].strip().strip('"')
-            try:
-                p = Path(os.path.expandvars(os.path.expanduser(line)))
-            except Exception:
+            if not line:
                 continue
+            p = Path(os.path.expandvars(os.path.expanduser(line)))
             if p.is_dir():
-                p = p / "config.jsonc"
-            if p.is_file():
+                for name in ("config.jsonc", "config.json"):
+                    candidate = p / name
+                    if candidate.is_file():
+                        candidates.append(candidate)
+                        break
+            elif p.is_file():
                 candidates.append(p)
     except (OSError, subprocess.TimeoutExpired):
         pass
@@ -142,7 +145,7 @@ def read_config(path: Path) -> dict:
     try:
         return json.loads(strip_jsonc(path.read_text(encoding="utf-8")))
     except Exception as exc:
-        raise RuntimeError(f"Could not parse {path}: {exc}")
+        raise RuntimeError(f"Could not parse {path}: {exc}") from exc
 
 
 def module_key(item):
@@ -158,12 +161,13 @@ def resolve_logo(config_path: Path, source: str | None):
     if not source or source in {"auto", "none", "builtin"}:
         return None
     expanded = os.path.expandvars(os.path.expanduser(source.strip()))
-    paths = [Path(expanded)]
-    if not Path(expanded).is_absolute():
+    direct = Path(expanded)
+    paths = [direct]
+    if not direct.is_absolute():
         paths.extend([
-            config_path.parent / expanded,
-            Path.home() / expanded,
-            ASSET_DIR / expanded,
+            config_path.parent / direct,
+            Path.home() / direct,
+            ASSET_DIR / direct,
         ])
     for p in paths:
         try:
@@ -185,11 +189,11 @@ def run_fastfetch(config_path: Path):
         return "", "Fastfetch is not installed or not available in PATH."
     except subprocess.TimeoutExpired:
         return "", "Fastfetch preview timed out."
-    out = strip_ansi(result.stdout.rstrip("\n"))
-    err = strip_ansi(result.stderr.strip())
+    stdout = strip_ansi(result.stdout.rstrip("\n"))
+    stderr = strip_ansi(result.stderr.strip())
     if result.returncode != 0:
-        return out, err or "Fastfetch returned an error."
-    return out, ""
+        return stdout, stderr or "Fastfetch returned an error."
+    return stdout, ""
 
 
 class FastfetchDesigner(Gtk.Application):
@@ -207,6 +211,7 @@ class FastfetchDesigner(Gtk.Application):
         if getattr(self, "window", None):
             self.window.present()
             return
+
         self.window = Gtk.ApplicationWindow(application=app)
         self.window.set_title(APP_NAME)
         self.window.set_default_size(1280, 800)
@@ -225,14 +230,17 @@ class FastfetchDesigner(Gtk.Application):
         .heading { color: #F7F7F7; font-weight: 700; }
         .muted { color: #A5B0B5; font-size: 12px; }
         .preview-shell { background: #202A2D; border: 1px solid #405055; border-radius: 10px; padding: 14px; }
-        .preview-text, textview, textview.view { color: #F1E7C9; background: #202A2D; font-family: monospace; font-size: 14px; }
-        entry, spinbutton, dropdown { background: #202A2D; color: #F0F0F0; }
+        textview, textview.view { background: #202A2D; color: #F1E7C9; caret-color: #FFFFFF; font-family: monospace; font-size: 14px; }
+        textview.view text { background: transparent; }
+        entry, spinbutton, dropdown { background: #202A2D; color: #F0F0F0; caret-color: #FFFFFF; }
         checkbutton { color: #E0E5E7; }
         button { min-height: 30px; }
         """, -1)
         display = Gdk.Display.get_default()
         if display:
-            Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            Gtk.StyleContext.add_provider_for_display(
+                display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
 
     def build_ui(self):
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -316,7 +324,7 @@ class FastfetchDesigner(Gtk.Application):
         self.text_view.set_bottom_margin(8)
         self.text_view.set_left_margin(8)
         self.text_view.set_right_margin(8)
-        self.text_view.add_css_class("preview-text")
+        self.text_view.set_editable(True)
         self.text_buffer = self.text_view.get_buffer()
         self.text_buffer.connect("changed", self.on_text_changed)
         text_scroll.set_child(self.text_view)
@@ -330,6 +338,7 @@ class FastfetchDesigner(Gtk.Application):
         right.append(hint)
         self.status = Gtk.Label()
         self.status.set_xalign(0)
+        self.status.set_wrap(True)
         self.status.add_css_class("muted")
         right.append(self.status)
         paned.set_end_child(right)
@@ -352,70 +361,77 @@ class FastfetchDesigner(Gtk.Application):
         return box
 
     def row(self, parent, label, widget):
-        r = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        l = Gtk.Label(label=label)
-        l.set_xalign(0)
-        l.set_hexpand(True)
-        r.append(l)
-        r.append(widget)
-        parent.append(r)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        label_widget = Gtk.Label(label=label)
+        label_widget.set_xalign(0)
+        label_widget.set_hexpand(True)
+        row.append(label_widget)
+        row.append(widget)
+        parent.append(row)
 
     def spin(self, parent, label, value, low, high):
-        w = Gtk.SpinButton.new_with_range(low, high, 1)
-        w.set_value(value)
-        self.row(parent, label, w)
-        return w
+        widget = Gtk.SpinButton.new_with_range(low, high, 1)
+        widget.set_value(value)
+        self.row(parent, label, widget)
+        return widget
 
     def build_logo_panel(self, parent):
-        c = self.card(parent, "Logo", "The current configured image is loaded automatically when possible.")
-        b = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        card = self.card(parent, "Logo", "The current configured image is loaded automatically when possible.")
+        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         choose = Gtk.Button(label="Choose image")
         choose.connect("clicked", self.choose_logo)
         use = Gtk.Button(label="Use configured")
         use.connect("clicked", lambda *_: self.build_state_from_config())
-        b.append(choose)
-        b.append(use)
-        c.append(b)
+        buttons.append(choose)
+        buttons.append(use)
+        card.append(buttons)
+
         self.logo_source = Gtk.Entry()
         self.logo_source.set_placeholder_text("auto / image path")
-        self.row(c, "Source", self.logo_source)
-        self.logo_x = self.spin(c, "X", 0, -500, 500)
-        self.logo_y = self.spin(c, "Y", 0, -500, 500)
-        self.logo_w = self.spin(c, "Width", 40, 1, 500)
-        self.logo_h = self.spin(c, "Height", 22, 1, 500)
-        self.logo_gap = self.spin(c, "Gap", 4, 0, 100)
+        self.row(card, "Source", self.logo_source)
+        self.logo_x = self.spin(card, "X", 0, -500, 500)
+        self.logo_y = self.spin(card, "Y", 0, -500, 500)
+        self.logo_w = self.spin(card, "Width", 40, 1, 500)
+        self.logo_h = self.spin(card, "Height", 22, 1, 500)
+        self.logo_gap = self.spin(card, "Gap", 4, 0, 100)
 
     def build_color_panel(self, parent):
-        c = self.card(parent, "Appearance", "Edit the colors used by the Fastfetch display.")
+        card = self.card(parent, "Appearance", "Edit the colors used by the Fastfetch display.")
         self.preset = Gtk.DropDown.new_from_strings(["Custom"] + list(COLORS.keys()))
         self.preset.connect("notify::selected", self.apply_preset)
-        self.row(c, "Preset", self.preset)
+        self.row(card, "Preset", self.preset)
         self.color_entries = {}
-        for key, label in (("keys", "Keys"), ("title", "Title"), ("output", "Output"), ("separator", "Separator")):
-            e = Gtk.Entry()
-            e.set_width_chars(11)
-            e.connect("changed", lambda *_: self.apply_text_css())
-            self.color_entries[key] = e
-            self.row(c, label, e)
+        for key, label in (
+            ("keys", "Keys"),
+            ("title", "Title"),
+            ("output", "Output"),
+            ("separator", "Separator"),
+        ):
+            entry = Gtk.Entry()
+            entry.set_width_chars(11)
+            entry.connect("changed", lambda *_: self.apply_text_css())
+            self.color_entries[key] = entry
+            self.row(card, label, entry)
 
     def build_modules_panel(self, parent):
-        c = self.card(parent, "Modules", "Toggle common Fastfetch modules. Changes update Current Fastfetch.")
+        card = self.card(parent, "Modules", "Toggle common Fastfetch modules. Changes update Current Fastfetch.")
         grid = Gtk.Grid(column_spacing=12, row_spacing=2)
+        self.checks = {}
         for i, (label, key) in enumerate(MODULES):
-            cb = Gtk.CheckButton(label=label)
-            cb.connect("toggled", lambda *_: self.on_modules_changed())
-            self.checks[key] = cb
-            grid.attach(cb, i % 2, i // 2, 1, 1)
-        c.append(grid)
+            check = Gtk.CheckButton(label=label)
+            check.connect("toggled", lambda *_: self.on_modules_changed())
+            self.checks[key] = check
+            grid.attach(check, i % 2, i // 2, 1, 1)
+        card.append(grid)
 
     def build_advanced_panel(self, parent):
-        c = self.card(parent, "Advanced", "Open the actual JSONC when you need full manual control.")
-        e = Gtk.Button(label="Open config in editor")
-        e.connect("clicked", self.open_editor)
-        c.append(e)
+        card = self.card(parent, "Advanced", "Open the actual JSONC when you need full manual control.")
+        editor_button = Gtk.Button(label="Open config in editor")
+        editor_button.connect("clicked", self.open_editor)
+        card.append(editor_button)
         self.editor = Gtk.Entry()
         self.editor.set_text(os.environ.get("EDITOR", "micro"))
-        self.row(c, "Editor", self.editor)
+        self.row(card, "Editor", self.editor)
 
     def build_state_from_config(self):
         try:
@@ -425,37 +441,43 @@ class FastfetchDesigner(Gtk.Application):
             self.show_error(str(exc))
             return
 
-        logo = self.config.get("logo") if isinstance(self.config.get("logo"), dict) else {}
-        padding = logo.get("padding") if isinstance(logo.get("padding"), dict) else {}
+        logo = self.config.get("logo") if isinstance(self.config, dict) else {}
+        if not isinstance(logo, dict):
+            logo = {}
+
         self.syncing = True
         self.logo_source.set_text(str(logo.get("source", "auto")))
+        padding = logo.get("padding") if isinstance(logo.get("padding"), dict) else {}
         self.logo_x.set_value(float(padding.get("left", 0) or 0))
         self.logo_y.set_value(float(padding.get("top", 0) or 0))
         self.logo_gap.set_value(float(padding.get("right", 4) or 4))
         self.logo_w.set_value(float(logo.get("width", 40) or 40))
         self.logo_h.set_value(float(logo.get("height", 22) or 22))
 
-        display = self.config.get("display") if isinstance(self.config.get("display"), dict) else {}
+        display = self.config.get("display") if isinstance(self.config, dict) else {}
+        if not isinstance(display, dict):
+            display = {}
         colors = display.get("color") if isinstance(display.get("color"), dict) else {}
         for key, entry in self.color_entries.items():
             entry.set_text(str(colors.get(key, COLORS["Default"][key])))
 
-        modules = self.config.get("modules") or []
+        modules = self.config.get("modules") if isinstance(self.config, dict) else []
+        modules = modules if isinstance(modules, list) else []
         active = {module_key(item) for item in modules if module_key(item)}
-        for key, cb in self.checks.items():
-            cb.set_active(key in active if active else True)
-        self.syncing = False
+        for key, check in self.checks.items():
+            check.set_active(key in active if active else True)
 
-        source = str(logo.get("source", "auto"))
-        logo_path = resolve_logo(self.config_path, source)
+        logo_path = resolve_logo(self.config_path, logo.get("source"))
         if logo_path:
             self.logo.set_filename(str(logo_path))
             self.logo.set_visible(True)
         else:
-            self.logo.set_filename(None)
+            self.logo.set_paintable(None)
             self.logo.set_visible(False)
 
+        self.syncing = False
         self.text_edited = False
+        self.apply_text_css()
         self.refresh_output()
         self.status.set_text(f"Loaded: {self.config_path}")
 
@@ -480,26 +502,29 @@ class FastfetchDesigner(Gtk.Application):
         self.refresh_output()
 
     def apply_text_css(self):
-        if not hasattr(self, "text_view"):
+        if not hasattr(self, "text_view") or not self.color_entries:
             return
-        value = self.color_entries["output"].get_text().strip()
-        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
-            value = COLORS["Default"]["output"]
+        output = self.color_entries["output"].get_text().strip()
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", output):
+            output = COLORS["Default"]["output"]
         provider = Gtk.CssProvider()
         provider.load_from_data(
-            f"textview, textview.view {{ color: {value}; font-family: monospace; font-size: 14px; }}".encode(), -1
+            f"textview, textview.view {{ color: {output}; font-family: monospace; font-size: 14px; }}".encode(),
+            -1,
         )
         display = Gdk.Display.get_default()
         if display:
-            Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            Gtk.StyleContext.add_provider_for_display(
+                display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
 
     def apply_preset(self, dropdown, _pspec):
         names = ["Custom"] + list(COLORS.keys())
-        idx = dropdown.get_selected()
-        if idx <= 0 or idx >= len(names):
+        index = dropdown.get_selected()
+        if index <= 0 or index >= len(names):
             return
         self.syncing = True
-        for key, value in COLORS[names[idx]].items():
+        for key, value in COLORS[names[index]].items():
             self.color_entries[key].set_text(value)
         self.syncing = False
         self.apply_text_css()
@@ -521,6 +546,8 @@ class FastfetchDesigner(Gtk.Application):
             file = dialog.open_finish(result)
         except GLib.Error:
             return
+        if file is None or file.get_path() is None:
+            return
         source = Path(file.get_path())
         ASSET_DIR.mkdir(parents=True, exist_ok=True)
         target = ASSET_DIR / source.name
@@ -537,13 +564,16 @@ class FastfetchDesigner(Gtk.Application):
         editor = self.editor.get_text().strip() or "micro"
         try:
             subprocess.Popen(shlex.split(editor) + [str(self.config_path)])
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             self.show_error(str(exc))
 
     def save(self, *_):
         try:
             cfg = copy.deepcopy(self.config)
             logo = cfg.setdefault("logo", {})
+            if not isinstance(logo, dict):
+                logo = {}
+                cfg["logo"] = logo
             logo["source"] = self.logo_source.get_text().strip() or "auto"
             logo["width"] = self.logo_w.get_value_as_int()
             logo["height"] = self.logo_h.get_value_as_int()
@@ -554,7 +584,13 @@ class FastfetchDesigner(Gtk.Application):
             }
 
             display = cfg.setdefault("display", {})
+            if not isinstance(display, dict):
+                display = {}
+                cfg["display"] = display
             color = display.setdefault("color", {})
+            if not isinstance(color, dict):
+                color = {}
+                display["color"] = color
             for key, entry in self.color_entries.items():
                 value = entry.get_text().strip()
                 if re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
@@ -567,31 +603,32 @@ class FastfetchDesigner(Gtk.Application):
                     False,
                 )
                 lines = [line for line in raw.splitlines() if line.strip()]
-                cfg["modules"] = [{"type": "custom", "format": line} for line in lines]
+                cfg["modules"] = [
+                    {"type": "custom", "format": line}
+                    for line in lines
+                ]
             else:
                 selected = [key for _, key in MODULES if self.checks[key].get_active()]
                 if selected:
-                    existing = {
-                        module_key(item): item
-                        for item in cfg.get("modules", [])
-                        if module_key(item)
-                    }
+                    existing = {}
+                    for item in cfg.get("modules", []):
+                        key = module_key(item)
+                        if key:
+                            existing[key] = item
                     cfg["modules"] = [existing.get(key, key) for key in selected]
 
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
             if self.config_path.is_file():
-                shutil.copy2(
-                    self.config_path,
-                    self.config_path.with_name(self.config_path.name + ".bak"),
-                )
+                backup = self.config_path.with_name(self.config_path.name + ".bak")
+                shutil.copy2(self.config_path, backup)
             self.config_path.write_text(
                 json.dumps(cfg, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
             self.config = cfg
             self.text_edited = False
-            self.status.set_text(f"Saved: {self.config_path}")
             self.refresh_output()
+            self.status.set_text(f"Saved: {self.config_path}")
         except Exception as exc:
             self.show_error(str(exc))
 
