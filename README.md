@@ -1,45 +1,83 @@
 # Fastfetch Designer
 
-A lightweight Linux GUI for customizing Fastfetch without manually editing `~/.config/fastfetch/config.jsonc`.
+A lightweight native Linux GUI for editing your **existing Fastfetch setup visually**.
 
-Fastfetch Designer is intentionally small and focused: simple controls on the left and a live Fastfetch preview on the right.
+Open the app and your current Fastfetch configuration is loaded automatically. The **Current Fastfetch** area is the main editor: you can edit the displayed text directly, see your configured logo, move/resize it, change colors, toggle modules, and save the result without manually opening `config.jsonc`.
 
-## Features
+## What you get
 
-### Logo / emblem
-- Built-in Fastfetch logo support.
-- Import PNG, JPEG, WebP, GIF, or SVG images.
-- Imported images are copied to `~/.config/fastfetch/logos/`.
-- Configure logo type/source, width, height, X/Y padding, and gap.
+- Automatically loads the Fastfetch config found through the normal Fastfetch config search paths.
+- Shows the **actual configured logo/image** when it can be resolved to a local file.
+- **Current Fastfetch** is directly editable.
+- Edit displayed text and save it as Fastfetch custom modules.
+- Drag the logo in the preview to adjust its position.
+- Change logo width, height, X, Y, and gap.
+- Import a new PNG, JPEG, WebP, GIF, or SVG logo.
+- Change Keys, Title, Output, and Separator colors.
+- Presets: Default, Gruvbox, Catppuccin, Nord, Monochrome.
+- Toggle common Fastfetch modules from the GUI.
+- Refresh to reload the current configuration from disk.
+- Save creates `config.jsonc.bak` before replacing an existing config.
+- Optional button to open the real JSONC configuration in your editor.
+- No Electron, no web runtime, no daemon, and no background service.
+- Installs as a normal desktop application with a dedicated launcher icon.
 
-### Colors
+## Current Fastfetch
+
+The application intentionally treats **Current Fastfetch** as the important part of the UI.
+
+On startup it:
+
+```text
+Fastfetch config search
+        ↓
+load current config
+        ↓
+run installed Fastfetch
+        ↓
+show current output + configured logo
+        ↓
+edit visually
+        ↓
+Save
+```
+
+The application first checks `FASTFETCH_CONFIG` / `FASTFETCH_CONFIG_PATH`, then Fastfetch's `--list-config-paths` output, and finally the normal `~/.config/fastfetch/config.jsonc` / `config.json` locations.
+
+## Editing the displayed text
+
+Click inside **Current Fastfetch** and edit the text directly, just like a simple text editor.
+
+When you press **Save**, manually edited lines are stored as Fastfetch `custom` modules. This keeps the workflow simple for people who do not want to learn the Fastfetch JSONC structure.
+
+When the text has not been manually edited, the existing module configuration is kept and the module checkboxes continue to control the standard modules.
+
+## Logo
+
+The configured logo is loaded automatically when its `source` points to an accessible local image.
+
+You can also choose a new image from the GUI. Imported images are copied to:
+
+```text
+~/.config/fastfetch/assets/
+```
+
+The logo controls let you change its position and size without manually editing JSONC.
+
+## Colors
+
+Fastfetch Designer provides independent color fields for:
+
 - Keys
 - Title
 - Output
 - Separator
-- RGB hex colors such as `#EBDBB2`.
-- Presets: Default, Gruvbox, Catppuccin, Nord, Monochrome.
-- High-contrast defaults designed to remain readable on dark GTK/Wayland themes.
 
-### Modules
-Toggle common modules from the GUI:
-`OS`, `Kernel`, `Uptime`, `Packages`, `Shell`, `Display`, `DE`, `WM`, `Theme`, `Icons`, `Terminal`, `CPU`, `GPU`, `Memory`, and `Disk`.
+RGB hex values such as `#EBDBB2` are supported.
 
-### Automatic configuration loading
-Fastfetch Designer detects the configuration currently available through Fastfetch's configuration search paths and loads the first existing config it finds. Press **Refresh** to reload the config from disk after making external changes.
+## Fonts
 
-### Safe config editing
-- Changes are previewed with a temporary Fastfetch config.
-- **Save config** writes to the config currently loaded by the application.
-- Existing configs are backed up as `config.jsonc.bak` before overwrite.
-- Existing per-module object settings are preserved where possible.
-- An editor button is available for direct editing when needed.
-
-### Fonts
-There is intentionally no font selector. Fastfetch Designer does not manage terminal fonts; users can configure fonts through their terminal emulator or system settings.
-
-### Application launcher
-Installation creates a normal desktop application entry called **Fastfetch Designer** and installs a dedicated scalable SVG icon. After installation, open it from your usual application launcher—no manual `.desktop` or icon setup is required.
+There is intentionally **no font selector**. Fastfetch Designer does not manage terminal fonts. Configure the font in your terminal emulator or system instead.
 
 ## Requirements
 
@@ -49,9 +87,7 @@ For Arch Linux / CachyOS:
 sudo pacman -S --needed git fastfetch gtk4 python python-gobject
 ```
 
-`desktop-file-utils` is optional.
-
-## Installation
+## Install
 
 Clone the repository:
 
@@ -62,21 +98,19 @@ chmod +x install.sh
 ./install.sh
 ```
 
-Or use one copy-paste block:
+Or paste this one block:
 
 ```bash
 sudo pacman -S --needed git fastfetch gtk4 python python-gobject && git clone https://github.com/ilhamfirmansyahhub/Fastfetch-Designer.git && cd Fastfetch-Designer && chmod +x install.sh && ./install.sh
 ```
 
-Then search for **Fastfetch Designer** in your application launcher.
+After installation, open **Fastfetch Designer** from your normal application launcher. You do not need to open a terminal, `.desktop` file, or `config.jsonc` manually.
 
-You can also start it from the terminal:
+Run from terminal when needed:
 
 ```bash
 fastfetch-designer
 ```
-
-The application installer itself does not require `sudo`. It installs user-local files under `~/.local/share/`, `~/.local/bin/`, `~/.local/share/applications/`, and `~/.local/share/icons/`.
 
 ## Installed files
 
@@ -87,16 +121,10 @@ The application installer itself does not require `sudo`. It installs user-local
 ~/.local/share/icons/hicolor/scalable/apps/fastfetch-designer.svg
 ```
 
-Fastfetch config:
+Your Fastfetch configuration remains where Fastfetch normally finds it, for example:
 
 ```text
 ~/.config/fastfetch/config.jsonc
-```
-
-Custom logos:
-
-```text
-~/.config/fastfetch/logos/
 ```
 
 ## Uninstall
@@ -105,20 +133,19 @@ Custom logos:
 rm -rf ~/.local/share/fastfetch-designer
 rm -f ~/.local/bin/fastfetch-designer
 rm -f ~/.local/share/applications/fastfetch-designer.desktop
-rm -f ~/.local/share/applications/fasfetch-designer.desktop
 rm -f ~/.local/share/icons/hicolor/scalable/apps/fastfetch-designer.svg
 ```
 
-Your Fastfetch config and custom logos are not removed.
+Your Fastfetch configuration and assets are not removed.
 
 ## Design goals
 
-- Lightweight GTK4 + Python GObject application.
-- No daemon.
-- No background service.
-- No database.
-- No Electron/web wrapper.
-- User-local installation.
-- Backup before overwriting Fastfetch config.
-- No terminal font management.
-- Simple and easy to maintain.
+Fastfetch Designer stays intentionally simple:
+
+- Native GTK4 + Python GObject
+- User-local installation
+- Direct visual editing
+- Current configuration loaded automatically
+- Lightweight preview/editor
+- Safe config backup before saving
+- No unnecessary services or runtime layers
