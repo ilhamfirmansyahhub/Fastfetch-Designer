@@ -8,7 +8,7 @@ The interface follows a simple layout: controls on the left and a live Fastfetch
 
 ## What you get
 
-After installation, you get a normal desktop application called **Fastfetch Designer**. An application launcher entry is installed, so you can open it directly from your desktop environment or application launcher without typing commands or manually editing the Fastfetch configuration.
+After installation, you get a normal desktop application called **Fastfetch Designer** with its own application icon. A `.desktop` launcher entry and a scalable SVG icon are installed, so you can open it directly from your desktop environment or application launcher without typing commands or manually editing the Fastfetch configuration.
 
 The application does not run as a daemon and does not add a background service. It is a small GUI editor that writes your Fastfetch configuration when you press **Save config**.
 
@@ -74,6 +74,16 @@ The preview uses the installed `fastfetch` binary with a temporary configuration
 - Open the generated config in your preferred editor (`$EDITOR`, with `micro` as the default).
 - Existing per-module object settings are preserved where possible when modules are toggled.
 
+## Application icon
+
+Fastfetch Designer includes a dedicated launcher icon matching the project's terminal/customization theme. The icon is installed as a scalable SVG at:
+
+```text
+~/.local/share/icons/hicolor/scalable/apps/fastfetch-designer.svg
+```
+
+The desktop entry points to this icon, so the application should appear with its proper icon in application menus and launchers rather than using a generic terminal icon.
+
 ## Fonts
 
 Fastfetch itself controls terminal content and layout; the actual terminal font is normally controlled by your terminal emulator such as Ghostty, Kitty, or foot.
@@ -118,7 +128,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-Then open **Fastfetch Designer** from your application launcher.
+Then open **Fastfetch Designer** from your application launcher. It should have the project's custom icon.
 
 You can also start it directly from the terminal:
 
@@ -126,7 +136,7 @@ You can also start it directly from the terminal:
 fastfetch-designer
 ```
 
-No `sudo` is required for the project installer. The application is installed for the current user under `~/.local/share/`, `~/.local/bin/`, and `~/.local/share/applications/`.
+No `sudo` is required for the project installer. The application is installed for the current user under `~/.local/share/`, `~/.local/bin/`, `~/.local/share/applications/`, and `~/.local/share/icons/`.
 
 ## One-copy-paste installation
 
@@ -140,7 +150,7 @@ chmod +x install.sh && \
 ./install.sh
 ```
 
-After that, search for **Fastfetch Designer** in your normal application launcher.
+After that, search for **Fastfetch Designer** in your normal application launcher. No manual `.desktop` file or icon setup is required.
 
 ## Where files are installed
 
@@ -150,6 +160,7 @@ The installer uses user-local paths:
 ~/.local/share/fastfetch-designer/src/fastfetch_designer.py
 ~/.local/bin/fastfetch-designer
 ~/.local/share/applications/fastfetch-designer.desktop
+~/.local/share/icons/hicolor/scalable/apps/fastfetch-designer.svg
 ```
 
 Your Fastfetch configuration is not moved:
@@ -172,6 +183,7 @@ Remove the installed application files with:
 rm -rf ~/.local/share/fastfetch-designer
 rm -f ~/.local/bin/fastfetch-designer
 rm -f ~/.local/share/applications/fastfetch-designer.desktop
+rm -f ~/.local/share/icons/hicolor/scalable/apps/fastfetch-designer.svg
 ```
 
 This does **not** remove your Fastfetch configuration or your custom logos.
@@ -188,6 +200,7 @@ Fastfetch Designer intentionally stays small and focused:
 - No unnecessary configuration framework
 - User-local installation
 - Backup before overwriting Fastfetch config
+- Dedicated lightweight SVG launcher icon
 
 The goal is to make Fastfetch customization approachable while keeping the tool lightweight and simple.
 
