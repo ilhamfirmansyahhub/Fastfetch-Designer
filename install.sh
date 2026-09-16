@@ -25,6 +25,7 @@ install -m 755 "$PROJECT_DIR/src/fastfetch_designer.py" "$APP_DIR/fastfetch_desi
 install -m 755 "$PROJECT_DIR/bin/fastfetch-designer" "$BIN_DIR/fastfetch-designer"
 install -m 644 "$PROJECT_DIR/data/fastfetch-designer.svg" "$ICON_DIR/fastfetch-designer.svg"
 
+# Rebuild the launcher every time so installations cannot retain an old Exec path.
 cat > "$DESKTOP_DIR/fastfetch-designer.desktop" <<EOF
 [Desktop Entry]
 Name=Fastfetch Designer
