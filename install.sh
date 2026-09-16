@@ -22,13 +22,8 @@ command -v fastfetch >/dev/null 2>&1 || {
 mkdir -p "$APP_DIR" "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
 
 install -m 755 "$PROJECT_DIR/src/fastfetch_designer.py" "$APP_DIR/fastfetch_designer.py"
+install -m 755 "$PROJECT_DIR/bin/fastfetch-designer" "$BIN_DIR/fastfetch-designer"
 install -m 644 "$PROJECT_DIR/data/fastfetch-designer.svg" "$ICON_DIR/fastfetch-designer.svg"
-
-cat > "$BIN_DIR/fastfetch-designer" <<EOF
-#!/usr/bin/env bash
-exec python3 "$APP_DIR/fastfetch_designer.py" "\$@"
-EOF
-chmod 755 "$BIN_DIR/fastfetch-designer"
 
 cat > "$DESKTOP_DIR/fastfetch-designer.desktop" <<EOF
 [Desktop Entry]
@@ -49,10 +44,10 @@ if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
 fi
 
-# Validate the installed Python source before reporting success.
 python3 -m py_compile "$APP_DIR/fastfetch_designer.py"
+bash -n "$BIN_DIR/fastfetch-designer"
 
 printf '\nFastfetch Designer installed successfully.\n'
 printf 'Command: %s\n' "$BIN_DIR/fastfetch-designer"
 printf 'Launcher: Fastfetch Designer (with application icon)\n'
-printf 'Config detection: automatic\n'
+printf 'Config detection: follows Fastfetch search paths\n'
