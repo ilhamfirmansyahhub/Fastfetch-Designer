@@ -10,64 +10,29 @@ import sys
 from pathlib import Path
 
 import gi
+
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gdk, Gio, GLib
 
-APP_ID = "io.github.ilhamfirmansyahhub.FastfetchDesigner"
 APP_NAME = "Fastfetch Designer"
-DEFAULT_CONFIG = Path.home() / ".config" / "fastfetch" / "config.jsonc"
-LOGO_DIR = Path.home() / ".config" / "fastfetch" / "logos"
-ICON_NAME = "fastfetch-designer"
+APP_ID = "io.github.ilhamfirmansyahhub.FastfetchDesigner"
+CONFIG_FALLBACK = Path.home() / ".config" / "fastfetch" / "config.jsonc"
+ASSET_DIR = Path.home() / ".config" / "fastfetch" / "assets"
 
 MODULES = [
-    ("OS", "os"),
-    ("Kernel", "kernel"),
-    ("Uptime", "uptime"),
-    ("Packages", "packages"),
-    ("Shell", "shell"),
-    ("Display", "display"),
-    ("DE", "de"),
-    ("WM", "wm"),
-    ("Theme", "theme"),
-    ("Icons", "icons"),
-    ("Terminal", "terminal"),
-    ("CPU", "cpu"),
-    ("GPU", "gpu"),
-    ("Memory", "memory"),
-    ("Disk", "disk"),
+    ("OS", "os"), ("Kernel", "kernel"), ("Uptime", "uptime"),
+    ("Packages", "packages"), ("Shell", "shell"), ("Display", "display"),
+    ("DE", "de"), ("WM", "wm"), ("Theme", "theme"), ("Icons", "icons"),
+    ("Terminal", "terminal"), ("CPU", "cpu"), ("GPU", "gpu"),
+    ("Memory", "memory"), ("Disk", "disk"),
 ]
 
-PRESETS = {
-    "Default": {
-        "keys": "#E6E6E6",
-        "title": "#F0F0F0",
-        "output": "#D8DEE9",
-        "separator": "#9AA6AC",
-    },
-    "Gruvbox": {
-        "keys": "#EBDBB2",
-        "title": "#D79921",
-        "output": "#FBF1C7",
-        "separator": "#B8BB26",
-    },
-    "Catppuccin": {
-        "keys": "#CDD6F4",
-        "title": "#89B4FA",
-        "output": "#CDD6F4",
-        "separator": "#A6E3A1",
-    },
-    "Nord": {
-        "keys": "#D8DEE9",
-        "title": "#88C0D0",
-        "output": "#E5E9F0",
-        "separator": "#81A1C1",
-    },
-    "Monochrome": {
-        "keys": "#D0D0D0",
-        "title": "#FFFFFF",
-        "output": "#B8B8B8",
-        "separator": "#808080",
-    },
+COLORS = {
+    "Default": {"keys": "#EBDBB2", "title": "#F0F0F0", "output": "#D8DEE9", "separator": "#928374"},
+    "Gruvbox": {"keys": "#EBDBB2", "title": "#FABD2F", "output": "#FBF1C7", "separator": "#B8BB26"},
+    "Catppuccin": {"keys": "#CDD6F4", "title": "#89B4FA", "output": "#CDD6F4", "separator": "#A6E3A1"},
+    "Nord": {"keys": "#D8DEE9", "title": "#88C0D0", "output": "#E5E9F0", "separator": "#81A1C1"},
+    "Monochrome": {"keys": "#FFFFFF", "title": "#FFFFFF", "output": "#D0D0D0", "separator": "#888888"},
 }
 
 
@@ -96,13 +61,11 @@ def strip_jsonc(text: str) -> str:
             i += 2
             while i < len(text) and text[i] not in "\r\n":
                 i += 1
-            continue
         elif c == "/" and n == "*":
             i += 2
             while i + 1 < len(text) and not (text[i] == "*" and text[i + 1] == "/"):
                 i += 1
             i += 2
-            continue
         else:
             out.append(c)
         i += 1
@@ -111,10 +74,12 @@ def strip_jsonc(text: str) -> str:
 
 def discover_config() -> Path:
     candidates = []
-
-    env = os.environ.get("FASTFETCH_CONFIG") or os.environ.get("FASTFETCH_CONFIG_PATH")
-    if env:
-        candidates.append(Path(os.path.expandvars(os.path.expanduser(env))))
+    for env_name in ("FASTFETCH_CONFIG", "FASTFETCH_CONFIG_PATH"):
+        value = os.environ.get(env_name)
+        if value:
+            p = Path(os.path.expandvars(os.path.expanduser(value)))
+            if p.is_file():
+                candidates.append(p)
 
     try:
         result = subprocess.run(
@@ -128,556 +93,325 @@ def discover_config() -> Path:
             line = raw.strip()
             if not line or line.startswith(("#", "//")):
                 continue
-            # Some versions annotate paths with an arrow or status text.
-            if " -> " in line:
-                line = line.split(" -> ", 1)[0].strip()
-            line = line.strip('"')
-            p = Path(os.path.expandvars(os.path.expanduser(line)))
+            line = line.split(" -> ", 1)[0].strip().strip('"')
+            line = os.path.expandvars(os.path.expanduser(line))
+            p = Path(line)
+            if p.is_dir():
+                p = p / "config.jsonc"
             if p.is_file():
                 candidates.append(p)
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         pass
 
-    candidates.extend([
-        DEFAULT_CONFIG,
-        Path.home() / ".config" / "fastfetch" / "config.json",
-    ])
+    xdg = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    candidates.extend([xdg / "fastfetch" / "config.jsonc", xdg / "fastfetch" / "config.json", CONFIG_FALLBACK])
 
     seen = set()
-    for path in candidates:
+    for p in candidates:
         try:
-            path = path.resolve()
+            key = str(p.resolve())
+        except OSError:
+            key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        if p.is_file():
+            return p
+    return CONFIG_FALLBACK
+
+
+def read_config(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(strip_jsonc(path.read_text(encoding="utf-8")))
+    except Exception as exc:
+        raise RuntimeError(f"Could not parse {path}: {exc}")
+
+
+def module_key(item):
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        value = item.get("type") or item.get("name")
+        return value if isinstance(value, str) else None
+    return None
+
+
+def resolve_logo(config_path: Path, logo: dict):
+    if not isinstance(logo, dict):
+        return None
+    source = logo.get("source")
+    if not isinstance(source, str) or not source or source in {"auto", "none", "builtin"}:
+        return None
+    expanded = os.path.expandvars(os.path.expanduser(source.strip()))
+    paths = [Path(expanded)]
+    if not Path(expanded).is_absolute():
+        paths.extend([config_path.parent / expanded, Path.home() / expanded, ASSET_DIR / expanded])
+    for p in paths:
+        try:
+            if p.is_file():
+                return p
         except OSError:
             pass
-        if str(path) in seen:
-            continue
-        seen.add(str(path))
-        if path.is_file():
-            return path
-    return DEFAULT_CONFIG
+    return None
 
 
-def load_config(path: Path):
-    if not path.exists():
-        return {
-            "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
-            "logo": {"type": "builtin", "source": "auto"},
-            "display": {
-                "color": copy.deepcopy(PRESETS["Default"]),
-                "brightColor": True,
-            },
-            "modules": [name for _, name in MODULES],
-        }
-    return json.loads(strip_jsonc(path.read_text(encoding="utf-8")))
+def run_fastfetch(config_path: Path):
+    cmd = ["fastfetch"]
+    if config_path.is_file():
+        cmd += ["--config", str(config_path)]
+    cmd += ["--logo", "none", "--pipe"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=8, check=False)
+    except FileNotFoundError:
+        return "", "Fastfetch is not installed or not available in PATH."
+    except subprocess.TimeoutExpired:
+        return "", "Fastfetch preview timed out."
+    if result.returncode != 0:
+        return result.stdout.rstrip("\n"), result.stderr.strip() or "Fastfetch returned an error."
+    return result.stdout.rstrip("\n"), ""
 
 
 class FastfetchDesigner(Gtk.Application):
     def __init__(self):
-        super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
+        super().__init__(application_id=APP_ID)
         self.connect("activate", self.on_activate)
         self.config_path = discover_config()
-        self.config = load_config(self.config_path)
-        self.module_checks = {}
+        self.config = read_config(self.config_path)
+        self.syncing = False
+        self.text_edited = False
+        self.loading_text = False
 
     def on_activate(self, app):
-        if getattr(self, "window", None) is not None:
+        if getattr(self, "window", None):
             self.window.present()
             return
-
         self.window = Gtk.ApplicationWindow(application=app)
         self.window.set_title(APP_NAME)
-        self.window.set_default_size(1280, 780)
-        self.window.set_size_request(980, 650)
+        self.window.set_default_size(1280, 800)
+        self.window.set_size_request(1050, 680)
         self.apply_css()
         self.window.set_child(self.build_ui())
-        self.populate_from_config()
-        self.refresh_preview()
+        self.build_state_from_config()
         self.window.present()
 
     def apply_css(self):
         provider = Gtk.CssProvider()
         provider.load_from_data(b"""
+        * { color: #D8DEE9; }
         window { background: #11171A; }
         .root { background: #11171A; }
-        .sidebar { background: #10161A; border-right: 1px solid #39464A; }
-        .preview-area { background: #182124; }
-        .card { background: #1D272A; border: 1px solid #39484D; border-radius: 10px; padding: 10px; }
-        .heading { color: #F0F3F4; font-weight: 700; }
-        .body-text { color: #D8DEE9; }
-        .muted { color: #93A2A8; font-size: 12px; }
-        .terminal { background: #202A2D; border: 1px solid #405055; border-radius: 10px; padding: 18px; }
-        .terminal-bar { color: #9FAEB3; font-size: 12px; }
-        entry { background: #202A2D; color: #E6E6E6; caret-color: #E6E6E6; }
-        spinbutton, dropdown, combobox { color: #E6E6E6; }
-        checkbutton { color: #D8DEE9; min-height: 28px; }
-        button { min-height: 30px; }
+        .card { background: #1B2528; border: 1px solid #354247; border-radius: 10px; padding: 10px; }
+        .heading { color: #F4F6F7; font-weight: 700; }
+        .muted { color: #8F9CA2; font-size: 12px; }
+        .preview-shell { background: #1B2225; border: 1px solid #405055; border-radius: 10px; padding: 10px; }
+        textview, textview.view { background: #202A2D; color: #D8DEE9; font-family: monospace; font-size: 13px; }
+        entry, spinbutton, dropdown { background: #202A2D; color: #E6E6E6; }
+        checkbutton { color: #D8DEE9; }
         """, -1)
-        Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
     def build_ui(self):
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         root.add_css_class("root")
-
-        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        header.set_margin_start(16)
-        header.set_margin_end(16)
-        header.set_margin_top(12)
-        header.set_margin_bottom(10)
-
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        header.set_margin_start(16); header.set_margin_end(16); header.set_margin_top(12); header.set_margin_bottom(10)
         title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        title = Gtk.Label(label=APP_NAME)
-        title.set_xalign(0)
-        title.add_css_class("heading")
-        subtitle = Gtk.Label(label="Visual editor for the active Fastfetch configuration")
-        subtitle.set_xalign(0)
-        subtitle.add_css_class("muted")
-        title_box.append(title)
-        title_box.append(subtitle)
-        header.append(title_box)
-
-        spacer = Gtk.Box()
-        spacer.set_hexpand(True)
-        header.append(spacer)
-
-        refresh = Gtk.Button(label="Refresh")
-        refresh.connect("clicked", self.reload_config)
-        header.append(refresh)
-
-        save = Gtk.Button(label="Save config")
-        save.add_css_class("suggested-action")
-        save.connect("clicked", self.save_config)
-        header.append(save)
+        title = Gtk.Label(label=APP_NAME); title.set_xalign(0); title.add_css_class("heading")
+        subtitle = Gtk.Label(label="Edit your current Fastfetch setup visually"); subtitle.set_xalign(0); subtitle.add_css_class("muted")
+        title_box.append(title); title_box.append(subtitle); header.append(title_box)
+        spacer = Gtk.Box(); spacer.set_hexpand(True); header.append(spacer)
+        refresh = Gtk.Button(label="Reload current config"); refresh.connect("clicked", self.reload_config); header.append(refresh)
+        save = Gtk.Button(label="Save"); save.add_css_class("suggested-action"); save.connect("clicked", self.save); header.append(save)
         root.append(header)
 
-        paned = Gtk.Paned.new(Gtk.Orientation.HORIZONTAL)
-        paned.set_position(325)
-        root.append(paned)
-
-        sidebar = Gtk.ScrolledWindow()
-        sidebar.set_vexpand(True)
-        sidebar.set_min_content_width(300)
+        paned = Gtk.Paned.new(Gtk.Orientation.HORIZONTAL); paned.set_position(350); root.append(paned)
+        scroll = Gtk.ScrolledWindow(); scroll.set_min_content_width(320)
         side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        side.add_css_class("sidebar")
-        side.set_margin_start(12)
-        side.set_margin_end(12)
-        side.set_margin_top(8)
-        side.set_margin_bottom(12)
-        sidebar.set_child(side)
-        self.build_logo_card(side)
-        self.build_colors_card(side)
-        self.build_modules_card(side)
-        self.build_advanced_card(side)
-        paned.set_start_child(sidebar)
+        side.set_margin_start(12); side.set_margin_end(12); side.set_margin_top(4); side.set_margin_bottom(12)
+        scroll.set_child(side)
+        self.build_logo_panel(side); self.build_color_panel(side); self.build_modules_panel(side); self.build_advanced_panel(side)
+        paned.set_start_child(scroll)
 
-        preview = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        preview.add_css_class("preview-area")
-        preview.set_margin_start(12)
-        preview.set_margin_end(14)
-        preview.set_margin_top(8)
-        preview.set_margin_bottom(12)
+        right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        right.set_margin_start(12); right.set_margin_end(14); right.set_margin_top(8); right.set_margin_bottom(12)
+        current = Gtk.Label(label="Current Fastfetch"); current.set_xalign(0); current.add_css_class("heading"); right.append(current)
+        self.preview_shell = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8); self.preview_shell.add_css_class("preview-shell"); self.preview_shell.set_vexpand(True)
+        self.preview = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18); self.preview.set_vexpand(True)
+        self.preview_shell.append(self.preview)
 
-        label = Gtk.Label(label="Current Fastfetch")
-        label.set_xalign(0)
-        label.add_css_class("heading")
-        preview.append(label)
+        self.logo = Gtk.Picture(); self.logo.set_content_fit(Gtk.ContentFit.CONTAIN); self.logo.set_size_request(240, 300)
+        self.logo_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL); self.logo_box.set_size_request(250, -1); self.logo_box.set_halign(Gtk.Align.START); self.logo_box.set_valign(Gtk.Align.START)
+        self.logo_box.append(self.logo); self.preview.append(self.logo_box)
 
-        self.terminal = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        self.terminal.add_css_class("terminal")
-        self.terminal.set_vexpand(True)
-        preview.append(self.terminal)
+        self.text_view = Gtk.TextView(); self.text_view.set_monospace(True); self.text_view.set_wrap_mode(Gtk.WrapMode.NONE); self.text_view.set_hexpand(True); self.text_view.set_vexpand(True)
+        self.text_view.set_top_margin(14); self.text_view.set_bottom_margin(14); self.text_view.set_left_margin(8); self.text_view.set_right_margin(10)
+        self.text_buffer = self.text_view.get_buffer(); self.text_buffer.connect("changed", self.on_text_changed)
+        self.preview.append(self.text_view); right.append(self.preview_shell)
 
-        self.status = Gtk.Label(label=str(self.config_path))
-        self.status.set_xalign(0)
-        self.status.add_css_class("muted")
-        preview.append(self.status)
-        paned.set_end_child(preview)
+        hint = Gtk.Label(label="Edit the Fastfetch output directly here. Save converts manually edited text into Fastfetch custom modules.")
+        hint.set_xalign(0); hint.set_wrap(True); hint.add_css_class("muted"); right.append(hint)
+        self.status = Gtk.Label(); self.status.set_xalign(0); self.status.add_css_class("muted"); right.append(self.status)
+        paned.set_end_child(right)
         return root
 
     def card(self, parent, title, hint=None):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
-        box.add_css_class("card")
-        label = Gtk.Label(label=title)
-        label.set_xalign(0)
-        label.add_css_class("heading")
-        box.append(label)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7); box.add_css_class("card")
+        label = Gtk.Label(label=title); label.set_xalign(0); label.add_css_class("heading"); box.append(label)
         if hint:
-            h = Gtk.Label(label=hint)
-            h.set_xalign(0)
-            h.set_wrap(True)
-            h.add_css_class("muted")
-            box.append(h)
-        parent.append(box)
-        return box
+            h = Gtk.Label(label=hint); h.set_xalign(0); h.set_wrap(True); h.add_css_class("muted"); box.append(h)
+        parent.append(box); return box
 
     def row(self, parent, label, widget):
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        lab = Gtk.Label(label=label)
-        lab.set_xalign(0)
-        lab.set_hexpand(True)
-        lab.add_css_class("body-text")
-        row.append(lab)
-        row.append(widget)
-        parent.append(row)
+        r = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        l = Gtk.Label(label=label); l.set_xalign(0); l.set_hexpand(True); r.append(l); r.append(widget); parent.append(r)
 
-    def spin_row(self, parent, label, value, low, high):
-        spin = Gtk.SpinButton.new_with_range(low, high, 1)
-        spin.set_value(value)
-        spin.set_width_chars(5)
-        spin.connect("value-changed", lambda *_: self.refresh_preview())
-        self.row(parent, label, spin)
-        return spin
+    def spin(self, parent, label, value, low, high):
+        w = Gtk.SpinButton.new_with_range(low, high, 1); w.set_value(value); self.row(parent, label, w); return w
 
-    def build_logo_card(self, parent):
-        card = self.card(parent, "Logo", "Choose a built-in emblem or import an image.")
-        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        upload = Gtk.Button(label="Upload image")
-        upload.connect("clicked", self.choose_logo)
-        reset = Gtk.Button(label="Reset")
-        reset.connect("clicked", self.reset_logo)
-        buttons.append(upload)
-        buttons.append(reset)
-        card.append(buttons)
+    def build_logo_panel(self, parent):
+        c = self.card(parent, "Logo", "The currently configured image is loaded automatically when possible.")
+        b = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        choose = Gtk.Button(label="Choose image"); choose.connect("clicked", self.choose_logo)
+        reset = Gtk.Button(label="Use configured"); reset.connect("clicked", lambda *_: self.build_state_from_config())
+        b.append(choose); b.append(reset); c.append(b)
+        self.logo_source = Gtk.Entry(); self.logo_source.set_placeholder_text("auto / image path"); self.row(c, "Source", self.logo_source)
+        self.logo_x = self.spin(c, "X", 0, -500, 500); self.logo_y = self.spin(c, "Y", 0, -500, 500)
+        self.logo_w = self.spin(c, "Width", 40, 1, 500); self.logo_h = self.spin(c, "Height", 22, 1, 500); self.logo_gap = self.spin(c, "Gap", 4, 0, 100)
+        for w in (self.logo_x, self.logo_y, self.logo_w, self.logo_h, self.logo_gap): w.connect("value-changed", lambda *_: self.apply_logo_geometry())
 
-        self.logo_type = Gtk.DropDown.new_from_strings(["builtin", "file", "kitty", "sixel", "chafa"])
-        self.row(card, "Type", self.logo_type)
-        self.logo_source = Gtk.Entry()
-        self.logo_source.set_placeholder_text("auto, arch, or /path/to/image")
-        self.row(card, "Source", self.logo_source)
+    def build_color_panel(self, parent):
+        c = self.card(parent, "Appearance", "Edit the colors used by the Fastfetch display.")
+        self.preset = Gtk.DropDown.new_from_strings(["Custom"] + list(COLORS.keys())); self.preset.connect("notify::selected", self.apply_preset); self.row(c, "Preset", self.preset)
+        self.color_entries = {}
+        for key, label in (("keys", "Keys"), ("title", "Title"), ("output", "Output"), ("separator", "Separator")):
+            e = Gtk.Entry(); e.set_width_chars(11); e.connect("changed", lambda *_: self.apply_text_css()); self.color_entries[key] = e; self.row(c, label, e)
 
-        self.logo_x = self.spin_row(card, "X", 0, -999, 999)
-        self.logo_y = self.spin_row(card, "Y", 0, -999, 999)
-        self.logo_w = self.spin_row(card, "W", 48, 1, 300)
-        self.logo_h = self.spin_row(card, "H", 29, 1, 300)
-        self.logo_gap = self.spin_row(card, "Gap", 3, 0, 100)
-
-    def build_colors_card(self, parent):
-        card = self.card(parent, "Appearance", "Use bright, readable colors similar to the reference Fastfetch layout.")
-        self.preset = Gtk.DropDown.new_from_strings(["Custom"] + list(PRESETS.keys()))
-        self.preset.connect("notify::selected", self.apply_preset)
-        self.row(card, "Preset", self.preset)
-
-        self.colors = {}
-        defaults = PRESETS["Default"]
-        for key, label in [("keys", "Keys"), ("title", "Title"), ("output", "Output"), ("separator", "Separator")]:
-            entry = Gtk.Entry()
-            entry.set_text(defaults[key])
-            entry.connect("changed", lambda *_: self.refresh_preview())
-            self.colors[key] = entry
-            self.row(card, label, entry)
-
-        self.bright = Gtk.CheckButton(label="Bright key/title/logo colors")
-        self.bright.set_active(True)
-        self.bright.connect("toggled", lambda *_: self.refresh_preview())
-        card.append(self.bright)
-
-    def build_modules_card(self, parent):
-        card = self.card(parent, "Modules", "Toggle the common modules shown by Fastfetch.")
-        grid = Gtk.Grid(column_spacing=12, row_spacing=2)
+    def build_modules_panel(self, parent):
+        c = self.card(parent, "Modules", "Toggle standard Fastfetch modules. Changes update Current Fastfetch.")
+        grid = Gtk.Grid(column_spacing=12, row_spacing=2); self.checks = {}
         for i, (label, key) in enumerate(MODULES):
-            check = Gtk.CheckButton(label=label)
-            check.connect("toggled", lambda *_: self.refresh_preview())
-            self.module_checks[key] = check
-            grid.attach(check, i % 2, i // 2, 1, 1)
-        card.append(grid)
+            cb = Gtk.CheckButton(label=label); cb.connect("toggled", lambda *_: self.on_modules_changed()); self.checks[key] = cb; grid.attach(cb, i % 2, i // 2, 1, 1)
+        c.append(grid)
 
-    def build_advanced_card(self, parent):
-        card = self.card(parent, "Advanced", "The active config is detected automatically. Edit it manually only when needed.")
-        edit = Gtk.Button(label="Open config in editor")
-        edit.connect("clicked", self.open_editor)
-        card.append(edit)
-        self.editor = Gtk.Entry()
-        self.editor.set_text(os.environ.get("EDITOR", "micro"))
-        self.row(card, "Editor", self.editor)
-        backup = Gtk.Label(label="Save creates config.jsonc.bak before replacing an existing config.")
-        backup.set_xalign(0)
-        backup.set_wrap(True)
-        backup.add_css_class("muted")
-        card.append(backup)
+    def build_advanced_panel(self, parent):
+        c = self.card(parent, "Advanced", "Open the actual JSONC when you need full manual control.")
+        edit = Gtk.Button(label="Open config in editor"); edit.connect("clicked", self.open_editor); c.append(edit)
+        self.editor = Gtk.Entry(); self.editor.set_text(os.environ.get("EDITOR", "micro")); self.row(c, "Editor", self.editor)
 
-    def populate_from_config(self):
-        logo = self.config.get("logo") or {}
-        if not isinstance(logo, dict):
-            logo = {}
-        type_name = str(logo.get("type", "builtin"))
-        types = ["builtin", "file", "kitty", "sixel", "chafa"]
-        self.logo_type.set_selected(types.index(type_name) if type_name in types else 0)
+    def build_state_from_config(self):
+        try:
+            self.config_path = discover_config(); self.config = read_config(self.config_path)
+        except Exception as exc:
+            self.show_error(str(exc)); return
+        logo = self.config.get("logo") if isinstance(self.config, dict) else {}; logo = logo if isinstance(logo, dict) else {}
         self.logo_source.set_text(str(logo.get("source", "auto")))
         padding = logo.get("padding") if isinstance(logo.get("padding"), dict) else {}
-        self.logo_x.set_value(float(padding.get("left", 0)))
-        self.logo_y.set_value(float(padding.get("top", 0)))
-        self.logo_gap.set_value(float(padding.get("right", 3)))
-        self.logo_w.set_value(float(logo.get("width", 48) or 48))
-        self.logo_h.set_value(float(logo.get("height", 29) or 29))
-
+        self.syncing = True
+        self.logo_x.set_value(float(padding.get("left", 0) or 0)); self.logo_y.set_value(float(padding.get("top", 0) or 0)); self.logo_gap.set_value(float(padding.get("right", 4) or 4))
+        self.logo_w.set_value(float(logo.get("width", 40) or 40)); self.logo_h.set_value(float(logo.get("height", 22) or 22))
         display = self.config.get("display") if isinstance(self.config.get("display"), dict) else {}
-        color = display.get("color") if isinstance(display.get("color"), dict) else {}
-        for key, entry in self.colors.items():
-            entry.set_text(str(color.get(key, PRESETS["Default"][key])))
-        self.bright.set_active(bool(display.get("brightColor", True)))
+        colors = display.get("color") if isinstance(display.get("color"), dict) else {}
+        for key, entry in self.color_entries.items(): entry.set_text(str(colors.get(key, COLORS["Default"][key])))
+        modules = self.config.get("modules") or []
+        active = {module_key(item) for item in modules if module_key(item)}
+        for key, cb in self.checks.items(): cb.set_active(key in active if active else True)
+        self.syncing = False
+        logo_path = resolve_logo(self.config_path, logo)
+        if logo_path:
+            self.logo.set_filename(str(logo_path)); self.logo.set_visible(True)
+        else:
+            self.logo.set_visible(False)
+        self.apply_logo_geometry(); self.text_edited = False; self.refresh_output(); self.status.set_text(f"Loaded: {self.config_path}")
 
-        mods = self.config.get("modules") or []
-        active = set()
-        for item in mods:
-            if isinstance(item, str):
-                active.add(item)
-            elif isinstance(item, dict) and item.get("type"):
-                active.add(str(item["type"]))
-        for key, check in self.module_checks.items():
-            check.set_active(key in active if active else True)
+    def reload_config(self, *_): self.build_state_from_config()
+
+    def refresh_output(self):
+        output, error = run_fastfetch(self.config_path)
+        self.loading_text = True
+        self.text_buffer.set_text(error if error and not output else output)
+        self.loading_text = False
+        self.text_edited = False
+        self.apply_text_css()
+
+    def on_text_changed(self, _buffer):
+        if not self.loading_text:
+            self.text_edited = True
+
+    def on_modules_changed(self):
+        if self.syncing or self.text_edited:
+            return
+        self.refresh_output()
+
+    def apply_text_css(self):
+        if not hasattr(self, "text_view"): return
+        value = self.color_entries["output"].get_text().strip()
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", value): value = COLORS["Default"]["output"]
+        provider = Gtk.CssProvider(); provider.load_from_data(f"textview.view {{ color: {value}; font-family: monospace; font-size: 13px; }}".encode(), -1)
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
     def apply_preset(self, dropdown, _pspec):
-        index = dropdown.get_selected()
-        names = ["Custom"] + list(PRESETS.keys())
-        if index <= 0 or index >= len(names):
-            return
-        preset = PRESETS[names[index]]
-        for key, value in preset.items():
-            self.colors[key].set_text(value)
-        self.refresh_preview()
+        names = ["Custom"] + list(COLORS.keys()); idx = dropdown.get_selected()
+        if idx <= 0 or idx >= len(names): return
+        for key, value in COLORS[names[idx]].items(): self.color_entries[key].set_text(value)
+        self.apply_text_css()
+
+    def apply_logo_geometry(self):
+        if not hasattr(self, "logo_box") or self.syncing: return
+        self.logo_box.set_margin_start(max(0, self.logo_x.get_value_as_int())); self.logo_box.set_margin_top(max(0, self.logo_y.get_value_as_int()))
+        self.logo.set_size_request(self.logo_w.get_value_as_int() * 7, self.logo_h.get_value_as_int() * 14)
 
     def choose_logo(self, *_):
         dialog = Gtk.FileDialog(title="Choose Fastfetch logo")
-        filter_img = Gtk.FileFilter()
-        filter_img.set_name("Images")
-        for mime in ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"]:
-            filter_img.add_mime_type(mime)
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(filter_img)
-        dialog.set_filters(filters)
-        dialog.set_default_filter(filter_img)
-        dialog.open(self.window, None, self.on_logo_selected)
+        filt = Gtk.FileFilter(); filt.set_name("Images")
+        for mime in ("image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"): filt.add_mime_type(mime)
+        filters = Gio.ListStore.new(Gtk.FileFilter); filters.append(filt); dialog.set_filters(filters); dialog.set_default_filter(filt); dialog.open(self.window, None, self.logo_selected)
 
-    def on_logo_selected(self, dialog, result):
+    def logo_selected(self, dialog, result):
+        try: file = dialog.open_finish(result)
+        except GLib.Error: return
+        source = Path(file.get_path()); ASSET_DIR.mkdir(parents=True, exist_ok=True); target = ASSET_DIR / source.name
         try:
-            file = dialog.open_finish(result)
-        except GLib.Error:
-            return
-        path = Path(file.get_path())
-        LOGO_DIR.mkdir(parents=True, exist_ok=True)
-        target = LOGO_DIR / path.name
-        try:
-            if path.resolve() != target.resolve():
-                shutil.copy2(path, target)
-            self.logo_type.set_selected(1)
-            self.logo_source.set_text(str(target))
-            self.refresh_preview()
+            if source.resolve() != target.resolve(): shutil.copy2(source, target)
+            self.logo_source.set_text(str(target)); self.logo.set_filename(str(target)); self.logo.set_visible(True); self.apply_logo_geometry()
         except OSError as exc:
-            self.show_error(str(exc))
-
-    def reset_logo(self, *_):
-        self.logo_type.set_selected(0)
-        self.logo_source.set_text("auto")
-        self.logo_x.set_value(0)
-        self.logo_y.set_value(0)
-        self.logo_w.set_value(48)
-        self.logo_h.set_value(29)
-        self.logo_gap.set_value(3)
-        self.refresh_preview()
-
-    def reload_config(self, *_):
-        try:
-            self.config_path = discover_config()
-            self.config = load_config(self.config_path)
-            self.populate_from_config()
-            self.refresh_preview()
-        except Exception as exc:
-            self.show_error(str(exc))
-
-    def current_state(self):
-        types = ["builtin", "file", "kitty", "sixel", "chafa"]
-        return {
-            "logo_type": types[self.logo_type.get_selected()],
-            "logo_source": self.logo_source.get_text().strip() or "auto",
-            "x": int(self.logo_x.get_value()),
-            "y": int(self.logo_y.get_value()),
-            "w": int(self.logo_w.get_value()),
-            "h": int(self.logo_h.get_value()),
-            "gap": int(self.logo_gap.get_value()),
-            "keys": self.colors["keys"].get_text().strip() or PRESETS["Default"]["keys"],
-            "title": self.colors["title"].get_text().strip() or PRESETS["Default"]["title"],
-            "output": self.colors["output"].get_text().strip() or PRESETS["Default"]["output"],
-            "separator": self.colors["separator"].get_text().strip() or PRESETS["Default"]["separator"],
-            "bright": self.bright.get_active(),
-            "modules": [key for _, key in MODULES if self.module_checks[key].get_active()],
-        }
-
-    def make_config(self):
-        state = self.current_state()
-        cfg = copy.deepcopy(self.config)
-        logo = cfg.setdefault("logo", {})
-        logo["type"] = state["logo_type"]
-        logo["source"] = state["logo_source"]
-        logo["width"] = state["w"]
-        logo["height"] = state["h"]
-        logo["padding"] = {
-            "left": state["x"],
-            "top": state["y"],
-            "right": state["gap"],
-        }
-
-        display = cfg.setdefault("display", {})
-        display["color"] = {
-            "keys": state["keys"],
-            "title": state["title"],
-            "output": state["output"],
-            "separator": state["separator"],
-        }
-        display["brightColor"] = state["bright"]
-
-        existing_objects = {
-            str(item.get("type")): item
-            for item in cfg.get("modules", [])
-            if isinstance(item, dict) and item.get("type")
-        }
-        cfg["modules"] = [existing_objects.get(key, key) for key in state["modules"]]
-        cfg.setdefault("$schema", "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json")
-        return cfg
-
-    def save_config(self, *_):
-        try:
-            new_cfg = self.make_config()
-            self.config_path.parent.mkdir(parents=True, exist_ok=True)
-            if self.config_path.exists():
-                backup = self.config_path.with_name(self.config_path.name + ".bak")
-                shutil.copy2(self.config_path, backup)
-            self.config_path.write_text(
-                json.dumps(new_cfg, indent=2, ensure_ascii=False) + "\n",
-                encoding="utf-8",
-            )
-            self.config = new_cfg
-            self.status.set_text(f"Saved: {self.config_path}")
-            self.refresh_preview()
-        except Exception as exc:
             self.show_error(str(exc))
 
     def open_editor(self, *_):
         editor = self.editor.get_text().strip() or "micro"
+        try: subprocess.Popen(editor.split() + [str(self.config_path)])
+        except OSError as exc: self.show_error(str(exc))
+
+    def save(self, *_):
         try:
-            subprocess.Popen(editor.split() + [str(self.config_path)])
-        except OSError as exc:
-            self.show_error(f"Could not launch editor: {exc}")
-
-    def preview_command(self):
-        try:
-            temp = Path(GLib.get_tmp_dir()) / f"fastfetch-designer-{os.getpid()}.jsonc"
-            temp.write_text(json.dumps(self.make_config(), ensure_ascii=False), encoding="utf-8")
-            try:
-                result = subprocess.run(
-                    ["fastfetch", "--config", str(temp), "--pipe"],
-                    capture_output=True,
-                    text=True,
-                    timeout=6,
-                    check=False,
-                )
-            finally:
-                try:
-                    temp.unlink()
-                except OSError:
-                    pass
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-            return result.stderr.strip() or "Fastfetch produced no output."
-        except FileNotFoundError:
-            return "fastfetch is not installed or not available in PATH."
-        except subprocess.TimeoutExpired:
-            return "Fastfetch preview timed out."
-        except Exception as exc:
-            return f"Preview error: {exc}"
-
-    def render_preview(self, output):
-        child = self.terminal.get_first_child()
-        while child is not None:
-            self.terminal.remove(child)
-            child = self.terminal.get_first_child()
-
-        bar = Gtk.Label(label="●  ●  ●    Current Fastfetch")
-        bar.set_xalign(0)
-        bar.add_css_class("terminal-bar")
-        self.terminal.append(bar)
-
-        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
-        body.set_vexpand(True)
-        body.set_margin_top(18)
-        body.set_margin_bottom(18)
-
-        state = self.current_state()
-        source = state["logo_source"]
-        image_path = Path(os.path.expanduser(source))
-        if state["logo_type"] in {"file", "kitty", "sixel", "chafa"} and image_path.is_file():
-            picture = Gtk.Picture.new_for_filename(str(image_path))
-            picture.set_content_fit(Gtk.ContentFit.CONTAIN)
-            picture.set_size_request(260, 300)
-            body.append(picture)
-        else:
-            logo = Gtk.Label(label=self.builtin_logo(source))
-            logo.set_xalign(0)
-            logo.set_yalign(0)
-            logo.set_vexpand(True)
-            logo.add_css_class("body-text")
-            body.append(logo)
-
-        text = Gtk.Label()
-        text.set_xalign(0)
-        text.set_yalign(0)
-        text.set_selectable(True)
-        text.set_use_markup(True)
-        text.set_hexpand(True)
-        text.set_wrap(False)
-        text.set_markup(self.format_output(output, state))
-        text.add_css_class("body-text")
-        body.append(text)
-        self.terminal.append(body)
-
-    def format_output(self, output, state):
-        lines = []
-        for raw in output.splitlines():
-            line = raw.rstrip()
-            if not line:
-                lines.append("")
-                continue
-            match = re.match(r"^(.*?)(:\s+)(.*)$", line)
-            if match:
-                key, sep, value = match.groups()
-                lines.append(
-                    f'<span foreground="{html.escape(state["keys"])}">{html.escape(key)}</span>'
-                    f'<span foreground="{html.escape(state["separator"])}">{html.escape(sep)}</span>'
-                    f'<span foreground="{html.escape(state["output"])}">{html.escape(value)}</span>'
-                )
+            cfg = copy.deepcopy(self.config)
+            logo = cfg.setdefault("logo", {})
+            logo["source"] = self.logo_source.get_text().strip() or "auto"
+            logo["width"] = self.logo_w.get_value_as_int(); logo["height"] = self.logo_h.get_value_as_int()
+            logo["padding"] = {"left": max(0, self.logo_x.get_value_as_int()), "top": max(0, self.logo_y.get_value_as_int()), "right": max(0, self.logo_gap.get_value_as_int())}
+            display = cfg.setdefault("display", {}); color = display.setdefault("color", {})
+            for key, entry in self.color_entries.items():
+                value = entry.get_text().strip()
+                if re.fullmatch(r"#[0-9A-Fa-f]{6}", value): color[key] = value
+            if self.text_edited:
+                raw = self.text_buffer.get_text(self.text_buffer.get_start_iter(), self.text_buffer.get_end_iter(), False)
+                lines = [line for line in raw.splitlines() if line.strip()]
+                cfg["modules"] = [{"type": "custom", "format": line} for line in lines]
             else:
-                lines.append(f'<span foreground="{html.escape(state["title"])}">{html.escape(line)}</span>')
-        return "\n".join(lines)
-
-    @staticmethod
-    def builtin_logo(source):
-        if source in {"arch", "auto", ""}:
-            return "\n".join([
-                "        /\\",
-                "       /  \\",
-                "      / /\\ \\",
-                "     / /  \\ \\",
-                "    /_/    \\_\\",
-            ])
-        return "\n".join([
-            "   █████████",
-            "  ██  LOGO  ██",
-            " ██           ██",
-            "  ██         ██",
-            "   ███████████",
-        ])
-
-    def refresh_preview(self, *_):
-        if not hasattr(self, "terminal"):
-            return
-        output = self.preview_command()
-        self.render_preview(output)
-        self.status.set_text(f"Active config: {self.config_path}")
+                modules = [key for _, key in MODULES if self.checks[key].get_active()]
+                if modules:
+                    existing = {module_key(item): item for item in cfg.get("modules", []) if isinstance(item, dict) and module_key(item)}
+                    cfg["modules"] = [existing.get(key, key) for key in modules]
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            if self.config_path.is_file(): shutil.copy2(self.config_path, self.config_path.with_name(self.config_path.name + ".bak"))
+            self.config_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            self.config = cfg; self.text_edited = False; self.status.set_text(f"Saved: {self.config_path}"); self.refresh_output()
+        except Exception as exc:
+            self.show_error(str(exc))
 
     def show_error(self, message):
-        dialog = Gtk.AlertDialog(message=APP_NAME)
-        dialog.set_detail(str(message))
-        dialog.show(self.window)
+        dialog = Gtk.AlertDialog(message=APP_NAME); dialog.set_detail(str(message)); dialog.show(self.window)
 
 
 def main():
