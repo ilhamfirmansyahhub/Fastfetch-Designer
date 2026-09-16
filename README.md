@@ -18,8 +18,7 @@ The application does not run as a daemon and does not add a background service. 
 
 - Choose a built-in Fastfetch logo source.
 - Import a custom PNG, JPEG, WebP, GIF, or SVG image.
-- Imported images are copied into:
-  `~/.config/fastfetch/logos/`
+- Imported images are copied into `~/.config/fastfetch/logos/`.
 - Configure logo type/source.
 - Adjust logo width and height.
 - Adjust X/Y padding and the gap between logo and text.
@@ -82,13 +81,13 @@ Fastfetch Designer includes a dedicated launcher icon matching the project's ter
 ~/.local/share/icons/hicolor/scalable/apps/fastfetch-designer.svg
 ```
 
-The desktop entry points to this icon, so the application should appear with its proper icon in application menus and launchers rather than using a generic terminal icon.
+The desktop entry points to this icon, so the application appears with its proper icon in application menus and launchers rather than using a generic terminal icon.
 
 ## Fonts
 
-Fastfetch itself controls terminal content and layout; the actual terminal font is normally controlled by your terminal emulator such as Ghostty, Kitty, or foot.
+Fastfetch does not manage the actual terminal font. Font selection is handled by the user's terminal emulator or desktop/system font settings, such as Ghostty, Kitty, foot, or the system font configuration.
 
-For that reason, **Preview font** changes the font used by the Fastfetch Designer preview only. It does not write a fake font setting into Fastfetch's `config.jsonc`.
+Fastfetch Designer intentionally does **not** include a font selector. This keeps the application focused on Fastfetch configuration and avoids duplicating settings that belong to the terminal or system.
 
 ## Requirements
 
@@ -201,6 +200,7 @@ Fastfetch Designer intentionally stays small and focused:
 - User-local installation
 - Backup before overwriting Fastfetch config
 - Dedicated lightweight SVG launcher icon
+- No terminal font management
 
 The goal is to make Fastfetch customization approachable while keeping the tool lightweight and simple.
 
