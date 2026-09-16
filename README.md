@@ -1,14 +1,14 @@
-# Fastfetch Designer
+# Fasfetch Designer
 
 A lightweight graphical editor for [Fastfetch](https://github.com/fastfetch-cli/fastfetch) on Linux.
 
-Fastfetch Designer is built for users who want to customize their Fastfetch without repeatedly opening and editing `~/.config/fastfetch/config.jsonc` by hand.
+Fasfetch Designer is built for users who want to customize their Fastfetch without repeatedly opening and editing `~/.config/fastfetch/config.jsonc` by hand.
 
 The interface follows a simple layout: controls on the left and a live Fastfetch-style preview on the right.
 
 ## What you get
 
-After installation, you get a normal desktop application called **Fastfetch Designer** with its own application icon. A `.desktop` launcher entry and a scalable SVG icon are installed, so you can open it directly from your desktop environment or application launcher without typing commands or manually editing the Fastfetch configuration.
+After installation, you get a normal desktop application called **Fasfetch Designer** with its own application icon. A `.desktop` launcher entry and a scalable SVG icon are installed, so you can open it directly from your desktop environment or application launcher without typing commands or manually editing the Fastfetch configuration.
 
 The application does not run as a daemon and does not add a background service. It is a small GUI editor that writes your Fastfetch configuration when you press **Save config**.
 
@@ -75,7 +75,7 @@ The preview uses the installed `fastfetch` binary with a temporary configuration
 
 ## Application icon
 
-Fastfetch Designer includes a dedicated launcher icon matching the project's terminal/customization theme. The icon is installed as a scalable SVG at:
+Fasfetch Designer includes a dedicated launcher icon matching the project's terminal/customization theme. The icon is installed as a scalable SVG at:
 
 ```text
 ~/.local/share/icons/hicolor/scalable/apps/fastfetch-designer.svg
@@ -87,7 +87,7 @@ The desktop entry points to this icon, so the application appears with its prope
 
 Fastfetch does not manage the actual terminal font. Font selection is handled by the user's terminal emulator or desktop/system font settings, such as Ghostty, Kitty, foot, or the system font configuration.
 
-Fastfetch Designer intentionally does **not** include a font selector. This keeps the application focused on Fastfetch configuration and avoids duplicating settings that belong to the terminal or system.
+Fasfetch Designer intentionally does **not** include a font selector. This keeps the application focused on Fastfetch configuration and avoids duplicating settings that belong to the terminal or system.
 
 ## Requirements
 
@@ -110,8 +110,8 @@ sudo pacman -S --needed desktop-file-utils
 Clone the repository:
 
 ```bash
-git clone https://github.com/ilhamfirmansyahhub/simple-fastfetch-manager-full-colors.git
-cd simple-fastfetch-manager-full-colors
+git clone https://github.com/ilhamfirmansyahhub/Fasfetch-Designer.git
+cd Fasfetch-Designer
 ```
 
 Install the dependencies:
@@ -127,7 +127,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-Then open **Fastfetch Designer** from your application launcher. It should have the project's custom icon.
+Then open **Fasfetch Designer** from your application launcher. It should have the project's custom icon.
 
 You can also start it directly from the terminal:
 
@@ -143,13 +143,13 @@ For a fresh Arch/CachyOS system, the following can be pasted as one block:
 
 ```bash
 sudo pacman -S --needed git fastfetch gtk4 python python-gobject && \
-git clone https://github.com/ilhamfirmansyahhub/simple-fastfetch-manager-full-colors.git && \
-cd simple-fastfetch-manager-full-colors && \
+git clone https://github.com/ilhamfirmansyahhub/Fasfetch-Designer.git && \
+cd Fasfetch-Designer && \
 chmod +x install.sh && \
 ./install.sh
 ```
 
-After that, search for **Fastfetch Designer** in your normal application launcher. No manual `.desktop` file or icon setup is required.
+After that, search for **Fasfetch Designer** in your normal application launcher. No manual `.desktop` file or icon setup is required.
 
 ## Where files are installed
 
@@ -189,7 +189,7 @@ This does **not** remove your Fastfetch configuration or your custom logos.
 
 ## Design goals
 
-Fastfetch Designer intentionally stays small and focused:
+Fasfetch Designer intentionally stays small and focused:
 
 - No daemon
 - No background service
