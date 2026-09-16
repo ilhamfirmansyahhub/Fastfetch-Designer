@@ -1,5 +1,57 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <title>Fastfetch Designer</title>
-  <image width="512" height="512" preserveAspectRatio="xMidYMid slice" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAD7GkOtAAAABmJLR0QA/wD/AP+gvaeTAAAgAElEQVR4nOzdeZxdVZ3v//eec0eT..."/>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#303947"/>
+      <stop offset="1" stop-color="#141a22"/>
+    </linearGradient>
+    <linearGradient id="window" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#263242"/>
+      <stop offset="1" stop-color="#11161d"/>
+    </linearGradient>
+    <linearGradient id="gear" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#c9d2df"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="12" result="blur"/>
+      <feOffset dy="8" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.32"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- App tile -->
+  <rect x="34" y="34" width="444" height="444" rx="92" fill="url(#tile)" stroke="#596679" stroke-width="4"/>
+  <rect x="51" y="51" width="410" height="410" rx="77" fill="none" stroke="#1a222d" stroke-width="2"/>
+
+  <!-- Terminal window -->
+  <g filter="url(#shadow)">
+    <rect x="88" y="108" width="336" height="286" rx="38" fill="url(#window)" stroke="#647287" stroke-width="4"/>
+    <path d="M88 147c0-21 17-38 38-38h260c21 0 38 17 38 38v54H88z" fill="#314051"/>
+    <circle cx="125" cy="136" r="13" fill="#ff6b6b"/>
+    <circle cx="164" cy="136" r="13" fill="#ffc44d"/>
+    <circle cx="203" cy="136" r="13" fill="#55d68c"/>
+
+    <!-- Fastfetch-style colored emblem matrix -->
+    <g>
+      <circle cx="130" cy="233" r="11" fill="#ff7070"/><circle cx="161" cy="233" r="11" fill="#ff7070"/><circle cx="192" cy="233" r="11" fill="#ff7070"/><circle cx="223" cy="233" r="11" fill="#ff7070"/>
+      <circle cx="130" cy="265" r="11" fill="#ffc857"/><circle cx="161" cy="265" r="11" fill="#ffc857"/><circle cx="192" cy="265" r="11" fill="#ffc857"/>
+      <circle cx="130" cy="297" r="11" fill="#5bd995"/><circle cx="161" cy="297" r="11" fill="#5bd995"/>
+      <circle cx="130" cy="329" r="11" fill="#4da3ff"/><circle cx="161" cy="329" r="11" fill="#4da3ff"/>
+      <circle cx="130" cy="361" r="11" fill="#a875ff"/>
+    </g>
+
+    <!-- Prompt -->
+    <path d="M270 220l35 35-35 35" fill="none" stroke="#f4f7fb" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="318" y="247" width="58" height="16" rx="8" fill="#f4f7fb"/>
+  </g>
+
+  <!-- Settings gear -->
+  <g transform="translate(356 342)" filter="url(#shadow)" fill="url(#gear)">
+    <path d="M0-79l17 9 18-5 8-16 24 24-10 15 5 19 17 8v34l-17 7-5 20 10 15-24 24-17-9-18 5-9 17h-34l-8-17-19-5-16 9-24-24 10-15-5-20-17-7v-34l17-8 5-19-10-15 24-24 16 8 19-5 8-16h34z"/>
+    <circle cx="0" cy="0" r="31" fill="#1a2029"/>
+    <circle cx="0" cy="0" r="19" fill="#222a36"/>
+  </g>
 </svg>
