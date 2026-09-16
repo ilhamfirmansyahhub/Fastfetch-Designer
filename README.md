@@ -4,6 +4,10 @@ A lightweight native Linux GUI for editing your **existing Fastfetch setup visua
 
 Open the app and your current Fastfetch configuration is loaded automatically. The **Current Fastfetch** area is the main editor: you can edit the displayed text directly, see your configured logo, move/resize it, change colors, toggle modules, and save the result without manually opening `config.jsonc`.
 
+## Screenshot
+
+![Fastfetch Designer preview](docs/fastfetch-designer-preview.svg)
+
 ## What you get
 
 - Automatically loads the Fastfetch config found through the normal Fastfetch config search paths.
