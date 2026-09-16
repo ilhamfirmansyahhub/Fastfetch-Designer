@@ -2,4 +2,9 @@
 set -euo pipefail
 
 APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fastfetch-designer"
+
+# Keep native GTK popovers/dropdowns readable even when the desktop uses a
+# light system theme. Respect an explicitly supplied GTK_THEME.
+export GTK_THEME="${GTK_THEME:-Adwaita:dark}"
+
 exec python3 "$APP_DIR/fastfetch_designer.py" "$@"
