@@ -35,6 +35,8 @@ COLORS = {
     "Monochrome": {"keys": "#FFFFFF", "title": "#FFFFFF", "output": "#E6E6E6", "separator": "#AAAAAA"},
 }
 
+# Fastfetch may emit ANSI terminal control sequences when its output is piped.
+# They are useful in a terminal but must never be shown as literal text here.
 ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 
 
@@ -68,13 +70,11 @@ def strip_jsonc(text: str) -> str:
             i += 2
             while i < len(text) and text[i] not in "\r\n":
                 i += 1
-            continue
         elif c == "/" and n == "*":
             i += 2
             while i + 1 < len(text) and text[i:i + 2] != "*/":
                 i += 1
             i += 2
-            continue
         else:
             out.append(c)
         i += 1
@@ -87,7 +87,7 @@ def discover_config() -> Path:
     for env_name in ("FASTFETCH_CONFIG", "FASTFETCH_CONFIG_PATH"):
         value = os.environ.get(env_name)
         if value:
-            p = Path(os.path.expandvars(os.path.expanduser(value))).expanduser()
+            p = Path(os.path.expandvars(os.path.expanduser(value)))
             if p.is_file():
                 candidates.append(p)
 
@@ -113,29 +113,32 @@ def discover_config() -> Path:
             line = line.split(" -> ", 1)[0].strip().strip('"')
             if not line:
                 continue
-            p = Path(os.path.expandvars(os.path.expanduser(line)))
-            if p.is_dir():
+            try:
+                path = Path(os.path.expandvars(os.path.expanduser(line)))
+            except (OSError, ValueError):
+                continue
+            if path.is_dir():
                 for name in ("config.jsonc", "config.json"):
-                    candidate = p / name
+                    candidate = path / name
                     if candidate.is_file():
                         candidates.append(candidate)
                         break
-            elif p.is_file():
-                candidates.append(p)
+            elif path.is_file():
+                candidates.append(path)
     except (OSError, subprocess.TimeoutExpired):
         pass
 
     seen = set()
-    for p in candidates:
+    for path in candidates:
         try:
-            key = str(p.resolve())
+            key = str(path.resolve())
         except OSError:
-            key = str(p)
+            key = str(path)
         if key in seen:
             continue
         seen.add(key)
-        if p.is_file():
-            return p
+        if path.is_file():
+            return path
     return CONFIG_FALLBACK
 
 
@@ -169,10 +172,10 @@ def resolve_logo(config_path: Path, source: str | None):
             Path.home() / direct,
             ASSET_DIR / direct,
         ])
-    for p in paths:
+    for path in paths:
         try:
-            if p.is_file():
-                return p
+            if path.is_file():
+                return path
         except OSError:
             pass
     return None
@@ -211,7 +214,6 @@ class FastfetchDesigner(Gtk.Application):
         if getattr(self, "window", None):
             self.window.present()
             return
-
         self.window = Gtk.ApplicationWindow(application=app)
         self.window.set_title(APP_NAME)
         self.window.set_default_size(1280, 800)
@@ -230,7 +232,7 @@ class FastfetchDesigner(Gtk.Application):
         .heading { color: #F7F7F7; font-weight: 700; }
         .muted { color: #A5B0B5; font-size: 12px; }
         .preview-shell { background: #202A2D; border: 1px solid #405055; border-radius: 10px; padding: 14px; }
-        textview, textview.view { background: #202A2D; color: #F1E7C9; caret-color: #FFFFFF; font-family: monospace; font-size: 14px; }
+        textview, textview.view { background: #202A2D; color: #F1E7C9; caret-color: #FFFFFF; font-family: monospace; font-size: 12px; }
         textview.view text { background: transparent; }
         entry, spinbutton, dropdown { background: #202A2D; color: #F0F0F0; caret-color: #FFFFFF; }
         checkbutton { color: #E0E5E7; }
@@ -251,6 +253,7 @@ class FastfetchDesigner(Gtk.Application):
         header.set_margin_end(16)
         header.set_margin_top(12)
         header.set_margin_bottom(10)
+
         title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         title = Gtk.Label(label=APP_NAME)
         title.set_xalign(0)
@@ -261,12 +264,15 @@ class FastfetchDesigner(Gtk.Application):
         title_box.append(title)
         title_box.append(subtitle)
         header.append(title_box)
+
         spacer = Gtk.Box()
         spacer.set_hexpand(True)
         header.append(spacer)
+
         reload_btn = Gtk.Button(label="Reload current config")
         reload_btn.connect("clicked", self.reload_config)
         header.append(reload_btn)
+
         save_btn = Gtk.Button(label="Save")
         save_btn.add_css_class("suggested-action")
         save_btn.connect("clicked", self.save)
@@ -277,26 +283,27 @@ class FastfetchDesigner(Gtk.Application):
         paned.set_position(350)
         root.append(paned)
 
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_min_content_width(320)
-        scroll.set_vexpand(True)
+        sidebar_scroll = Gtk.ScrolledWindow()
+        sidebar_scroll.set_min_content_width(320)
+        sidebar_scroll.set_vexpand(True)
         side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         side.set_margin_start(12)
         side.set_margin_end(12)
         side.set_margin_top(4)
         side.set_margin_bottom(12)
-        scroll.set_child(side)
+        sidebar_scroll.set_child(side)
         self.build_logo_panel(side)
         self.build_color_panel(side)
         self.build_modules_panel(side)
         self.build_advanced_panel(side)
-        paned.set_start_child(scroll)
+        paned.set_start_child(sidebar_scroll)
 
         right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         right.set_margin_start(12)
         right.set_margin_end(14)
         right.set_margin_top(8)
         right.set_margin_bottom(12)
+
         current = Gtk.Label(label="Current Fastfetch")
         current.set_xalign(0)
         current.add_css_class("heading")
@@ -305,42 +312,57 @@ class FastfetchDesigner(Gtk.Application):
         shell = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         shell.add_css_class("preview-shell")
         shell.set_vexpand(True)
-        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
         content.set_vexpand(True)
         shell.append(content)
 
+        logo_column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        logo_column.set_valign(Gtk.Align.START)
+        logo_column.set_size_request(220, -1)
         self.logo = Gtk.Picture()
         self.logo.set_content_fit(Gtk.ContentFit.CONTAIN)
-        self.logo.set_size_request(250, 350)
-        content.append(self.logo)
+        self.logo.set_size_request(210, 320)
+        logo_column.append(self.logo)
+        content.append(logo_column)
 
         text_scroll = Gtk.ScrolledWindow()
         text_scroll.set_hexpand(True)
         text_scroll.set_vexpand(True)
+        text_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        text_scroll.set_propagate_natural_width(False)
         self.text_view = Gtk.TextView()
         self.text_view.set_monospace(True)
-        self.text_view.set_wrap_mode(Gtk.WrapMode.NONE)
+        # Wrap long Fastfetch lines instead of clipping them at the right edge.
+        # The buffer itself stays unchanged, so saving still uses the real lines.
+        self.text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.text_view.set_top_margin(8)
         self.text_view.set_bottom_margin(8)
         self.text_view.set_left_margin(8)
         self.text_view.set_right_margin(8)
-        self.text_view.set_editable(True)
+        self.text_view.set_vexpand(True)
+        self.text_view.set_hexpand(True)
         self.text_buffer = self.text_view.get_buffer()
         self.text_buffer.connect("changed", self.on_text_changed)
         text_scroll.set_child(self.text_view)
         content.append(text_scroll)
+
         right.append(shell)
 
-        hint = Gtk.Label(label="Edit the Fastfetch output directly here. Save converts manually edited lines into Fastfetch custom modules.")
+        hint = Gtk.Label(
+            label="Current Fastfetch is loaded from your active config. Edit the text directly here; Save converts edited lines into custom modules."
+        )
         hint.set_xalign(0)
         hint.set_wrap(True)
         hint.add_css_class("muted")
         right.append(hint)
+
         self.status = Gtk.Label()
         self.status.set_xalign(0)
         self.status.set_wrap(True)
         self.status.add_css_class("muted")
         right.append(self.status)
+
         paned.set_end_child(right)
         return root
 
@@ -376,7 +398,7 @@ class FastfetchDesigner(Gtk.Application):
         return widget
 
     def build_logo_panel(self, parent):
-        card = self.card(parent, "Logo", "The current configured image is loaded automatically when possible.")
+        card = self.card(parent, "Logo", "The currently configured image is loaded automatically when possible.")
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         choose = Gtk.Button(label="Choose image")
         choose.connect("clicked", self.choose_logo)
@@ -509,7 +531,7 @@ class FastfetchDesigner(Gtk.Application):
             output = COLORS["Default"]["output"]
         provider = Gtk.CssProvider()
         provider.load_from_data(
-            f"textview, textview.view {{ color: {output}; font-family: monospace; font-size: 14px; }}".encode(),
+            f"textview, textview.view {{ color: {output}; font-family: monospace; font-size: 12px; }}".encode(),
             -1,
         )
         display = Gdk.Display.get_default()
@@ -603,18 +625,17 @@ class FastfetchDesigner(Gtk.Application):
                     False,
                 )
                 lines = [line for line in raw.splitlines() if line.strip()]
-                cfg["modules"] = [
-                    {"type": "custom", "format": line}
-                    for line in lines
-                ]
+                cfg["modules"] = [{"type": "custom", "format": line} for line in lines]
             else:
                 selected = [key for _, key in MODULES if self.checks[key].get_active()]
                 if selected:
                     existing = {}
-                    for item in cfg.get("modules", []):
-                        key = module_key(item)
-                        if key:
-                            existing[key] = item
+                    current_modules = cfg.get("modules", [])
+                    if isinstance(current_modules, list):
+                        for item in current_modules:
+                            key = module_key(item)
+                            if key:
+                                existing[key] = item
                     cfg["modules"] = [existing.get(key, key) for key in selected]
 
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
