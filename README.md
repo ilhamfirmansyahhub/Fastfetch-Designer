@@ -6,7 +6,13 @@ Open the app and your current Fastfetch configuration is loaded automatically. T
 
 ## Screenshot
 
-![Fastfetch Designer preview](docs/fastfetch-designer-readme.jpg)
+<p align="center">
+  <img src="screenshot_20260916_214500-region.png" alt="Fastfetch Designer" width="100%">
+</p>
+
+<p align="center">
+  <img src="screenshot_20260916_214511-region.png" alt="Fastfetch Designer additional screenshot" width="100%">
+</p>
 
 ## What you get
 
